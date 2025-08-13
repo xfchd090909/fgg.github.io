@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二次元图片随机生成器</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#7C3AED', // 主色调：深紫色
+                        secondary: '#EC4899', // 辅助色：粉色
+                        dark: 'rgba(0, 0, 0, 0.6)', // 深色半透明
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .backdrop-blur {
+                backdrop-filter: blur(8px);
+            }
+            .transition-transform {
+                transition: transform 0.3s ease;
+            }
+            .transition-opacity {
+                transition: opacity 0.5s ease;
+            }
+            .scale-hover {
+                transition: transform 0.2s ease;
+            }
+            .scale-hover:hover {
+                transform: scale(1.1);
+            }
+        }
+    </style>
+</head>
+<body class="overflow-hidden h-screen m-0 p-0 bg-black">
+    <!-- 背景图片容器 -->
+    <div id="background-container" class="fixed inset-0 z-0">
+        <img id="anime-image" src="" alt="二次元图片" class="w-full h-full object-cover transition-opacity duration-1000">
+    </div>
+    
+    <!-- 加载指示器 -->
+    <div id="loader" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+    
+    <!-- 控制UI -->
+    <div id="controls" class="fixed bottom-8 left-0 right-0 z-40 flex justify-center gap-4 transition-all duration-500 transform translate-y-0 opacity-100">
+        <div class="bg-dark backdrop-blur p-4 rounded-full flex gap-4 shadow-lg">
+            <button id="new-image" class="w-12 h-12 rounded-full bg-primary/80 flex items-center justify-center text-white hover:bg-primary scale-hover" title="生成新图片">
+                <i class="fa fa-refresh text-xl"></i>
+            </button>
+            <button id="download-image" class="w-12 h-12 rounded-full bg-secondary/80 flex items-center justify-center text-white hover:bg-secondary scale-hover" title="下载图片">
+                <i class="fa fa-download text-xl"></i>
+            </button>
+            <button id="toggle-ui" class="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center text-black hover:bg-white scale-hover" title="隐藏/显示界面">
+                <i class="fa fa-eye text-xl"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 隐藏状态下的唤醒按钮 -->
+    <div id="wake-button" class="fixed bottom-8 left-0 right-0 z-30 flex justify-center opacity-0 pointer-events-none transition-all duration-500">
+        <button class="w-12 h-12 rounded-full bg-white/30 backdrop-blur flex items-center justify-center text-white hover:bg-white/50 scale-hover">
+            <i class="fa fa-plus text-xl"></i>
+        </button>
+    </div>
+
+    <script>
+        // API列表
+        const imageApis = [
+            "https://t.alcy.cc/mp",
+            "https://t.alcy.cc/fj",
+            "http://www.98qy.com/sjbz/api.php",
+            "https://api.mtyqx.cn/tapi/random.php",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=azurlane",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=bluearchive",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=genshinimpact",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=arknights",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=honkai",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=fate",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=frontline",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=princess",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=idolmaster",
+            "https://image.anosu.top/pixiv/direct?r18=1&keyword=touhou"
+        ];
+        
+        // DOM元素
+        const imageElement = document.getElementById('anime-image');
+        const newImageButton = document.getElementById('new-image');
+        const downloadButton = document.getElementById('download-image');
+        const toggleUiButton = document.getElementById('toggle-ui');
+        const controls = document.getElementById('controls');
+        const wakeButton = document.getElementById('wake-button');
+        const loader = document.getElementById('loader');
+        const wakeBtnElement = wakeButton.querySelector('button');
+        
+        // 当前显示的图片URL
+        let currentImageUrl = '';
+        
+        // 显示加载指示器
+        function showLoader() {
+            loader.classList.remove('opacity-0', 'pointer-events-none');
+            loader.classList.add('opacity-100', 'pointer-events-auto');
+        }
+        
+        // 隐藏加载指示器
+        function hideLoader() {
+            loader.classList.remove('opacity-100', 'pointer-events-auto');
+            loader.classList.add('opacity-0', 'pointer-events-none');
+        }
+        
+        // 随机选择一个API并加载图片
+        function loadRandomImage() {
+            // 显示加载指示器
+            showLoader();
+            
+            // 隐藏当前图片
+            imageElement.style.opacity = '0';
+            
+            // 随机选择一个API
+            const randomApi = imageApis[Math.floor(Math.random() * imageApis.length)];
+            
+            // 为URL添加时间戳，防止缓存
+            const urlWithTimestamp = randomApi + (randomApi.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+            
+            // 创建一个新的Image对象来预加载图片，解决CORS问题
+            const tempImage = new Image();
+            tempImage.crossOrigin = 'anonymous';
+            
+            tempImage.onload = function() {
+                // 图片加载完成后显示
+                currentImageUrl = urlWithTimestamp;
+                imageElement.src = urlWithTimestamp;
+                
+                // 等待图片加载完成后显示
+                imageElement.onload = function() {
+                    imageElement.style.opacity = '1';
+                    hideLoader();
+                };
+            };
+            
+            tempImage.onerror = function() {
+                console.error('图片加载失败，尝试另一个API');
+                // 加载失败时尝试另一个API
+                setTimeout(loadRandomImage, 500);
+            };
+            
+            tempImage.src = urlWithTimestamp;
+        }
+        
+        // 下载图片功能，处理CORS问题
+        function downloadImage() {
+            if (!currentImageUrl) {
+                alert('没有可下载的图片，请先加载一张图片');
+                return;
+            }
+            
+            showLoader();
+            
+            // 创建一个新的Image对象来处理下载，使用代理解决CORS问题
+            const downloadImg = new Image();
+            
+            // 使用代理服务解决CORS问题
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(currentImageUrl);
+            downloadImg.crossOrigin = 'anonymous';
+            
+            downloadImg.onload = function() {
+                try {
+                    // 使用Canvas来规避CORS问题
+                    const canvas = document.createElement('canvas');
+                    canvas.width = downloadImg.width;
+                    canvas.height = downloadImg.height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(downloadImg, 0, 0);
+                    
+                    // 将Canvas内容转换为Blob
+                    canvas.toBlob(function(blob) {
+                        if (blob) {
+                            // 创建下载链接
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `anime-image-${new Date().getTime()}.jpg`;
+                            document.body.appendChild(a);
+                            a.click();
+                            
+                            // 清理
+                            setTimeout(() => {
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                                hideLoader();
+                            }, 100);
+                        } else {
+                            throw new Error('无法创建图片Blob');
+                        }
+                    }, 'image/jpeg');
+                } catch (error) {
+                    console.error('Canvas方法失败，尝试直接下载:', error);
+                    // 如果Canvas方法失败，尝试直接下载
+                    const a = document.createElement('a');
+                    a.href = proxyUrl;
+                    a.download = `anime-image-${new Date().getTime()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    hideLoader();
+                }
+            };
+            
+            downloadImg.onerror = function() {
+                console.error('下载图片失败，尝试使用不同的代理');
+                // 尝试不使用代理直接下载
+                const a = document.createElement('a');
+                a.href = currentImageUrl;
+                a.download = `anime-image-${new Date().getTime()}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                hideLoader();
+            };
+            
+            downloadImg.src = proxyUrl;
+        }
+        
+        // 切换UI显示状态
+        function toggleUI() {
+            const isHidden = controls.classList.contains('translate-y-20');
+            
+            if (isHidden) {
+                // 显示UI
+                controls.classList.remove('translate-y-20', 'opacity-0');
+                controls.classList.add('translate-y-0', 'opacity-100');
+                wakeButton.classList.remove('opacity-100', 'pointer-events-auto');
+                wakeButton.classList.add('opacity-0', 'pointer-events-none');
+                toggleUiButton.innerHTML = '<i class="fa fa-eye text-xl"></i>';
+            } else {
+                // 隐藏UI
+                controls.classList.remove('translate-y-0', 'opacity-100');
+                controls.classList.add('translate-y-20', 'opacity-0');
+                wakeButton.classList.remove('opacity-0', 'pointer-events-none');
+                wakeButton.classList.add('opacity-100', 'pointer-events-auto');
+                toggleUiButton.innerHTML = '<i class="fa fa-eye-slash text-xl"></i>';
+            }
+        }
+        
+        // 事件监听
+        newImageButton.addEventListener('click', loadRandomImage);
+        downloadButton.addEventListener('click', downloadImage);
+        toggleUiButton.addEventListener('click', toggleUI);
+        wakeBtnElement.addEventListener('click', toggleUI);
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ') { // 空格键加载新图片
+                e.preventDefault();
+                loadRandomImage();
+            } else if (e.key === 'd' || e.key === 'D') { // D键下载图片
+                e.preventDefault();
+                downloadImage();
+            } else if (e.key === 'h' || e.key === 'H') { // H键隐藏/显示UI
+                e.preventDefault();
+                toggleUI();
+            }
+        });
+        
+        // 初始加载一张图片
+        window.addEventListener('load', loadRandomImage);
+    </script>
+</body>
+</html>

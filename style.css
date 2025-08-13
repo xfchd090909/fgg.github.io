@@ -1,0 +1,31 @@
+/* 窗口拖动样式 */
+#window {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+/* 按钮悬停效果 */
+button {
+    outline: none;
+}
+
+/* 最大化状态样式 */
+.maximized {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+}
+
+.maximized #content {
+    height: calc(100vh - 80px) !important;
+}
+
+/* 最小化状态样式 */
+.minimized {
+    transform: scale(0) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
